@@ -22,19 +22,6 @@ except ImportError:
 def generate_random_vector(dims):
   return [random.gauss(0, 1) for _ in range(dims)]
 
-def generate_clustered_vectors(num_vectors, dims, num_clusters=5):
-  vectors = []
-  cluster_centers = [generate_random_vector(dims) for _ in range(num_clusters)]
-  
-  for i in range(num_vectors):
-    cluster_idx = i % num_clusters
-    center = cluster_centers[cluster_idx]
-    noise = [random.gauss(0, 0.3) for _ in range(dims)]
-    vector = [center[j] + noise[j] for j in range(dims)]
-    vectors.append(vector)
-  
-  return vectors, cluster_centers
-
 def normalize_vector(vec):
   magnitude = math.sqrt(sum(x * x for x in vec))
   if magnitude == 0:
@@ -65,44 +52,6 @@ def benchmark_insertion(dims, counts):
     results['throughput'].append(throughput)
     
     print(f"    Time: {elapsed:.3f}s, Throughput: {throughput:.0f} vectors/sec")
-    del db
-  
-  return results
-
-def benchmark_search(dims, db_sizes, k_values):
-  print(f"\n{'='*60}")
-  print(f"BENCHMARK: Search Performance")
-  print(f"{'='*60}")
-  
-  results = {'db_sizes': db_sizes, 'k_values': k_values, 'times': {}}
-  
-  for k in k_values:
-    results['times'][k] = []
-  
-  for db_size in db_sizes:
-    print(f"  Database size: {db_size:,} vectors")
-    
-    db = VectorDatabase(dims, VDBMetric.COSINE)
-    vectors = [generate_random_vector(dims) for _ in range(db_size)]
-    
-    for i, vec in enumerate(vectors):
-      db.add_vector(vec, f"vec_{i}")
-    
-    query = generate_random_vector(dims)
-    
-    for k in k_values:
-      num_searches = max(10, min(100, 10000 // db_size))
-      
-      start = time.time()
-      for _ in range(num_searches):
-        db.search(query, k)
-      elapsed = time.time() - start
-      
-      avg_time = (elapsed / num_searches) * 1000
-      results['times'][k].append(avg_time)
-      
-      print(f"    k={k}: {avg_time:.2f}ms per search")
-    
     del db
   
   return results
@@ -138,120 +87,6 @@ def benchmark_dimensionality(dimensions, fixed_count=1000):
     print(f"    Insert: {insert_time:.3f}s, Search: {search_time:.2f}ms")
     del db
   
-  return results
-
-def benchmark_metrics(dims=128, count=5000):
-  print(f"\n{'='*60}")
-  print(f"BENCHMARK: Distance Metrics Comparison")
-  print(f"{'='*60}")
-  
-  metrics = [
-    (VDBMetric.COSINE, "Cosine"),
-    (VDBMetric.EUCLIDEAN, "Euclidean"),
-    (VDBMetric.DOT_PRODUCT, "Dot Product")
-  ]
-  
-  results = {'metrics': [], 'insert_times': [], 'search_times': []}
-  
-  vectors = [generate_random_vector(dims) for _ in range(count)]
-  query = generate_random_vector(dims)
-  
-  for metric_id, metric_name in metrics:
-    print(f"  Testing {metric_name} metric...")
-    
-    db = VectorDatabase(dims, metric_id)
-    
-    start = time.time()
-    for i, vec in enumerate(vectors):
-      db.add_vector(vec, f"vec_{i}")
-    insert_time = time.time() - start
-    
-    start = time.time()
-    for _ in range(100):
-      db.search(query, 10)
-    search_time = (time.time() - start) / 100 * 1000
-    
-    results['metrics'].append(metric_name)
-    results['insert_times'].append(insert_time)
-    results['search_times'].append(search_time)
-    
-    print(f"    Insert: {insert_time:.3f}s, Search: {search_time:.2f}ms")
-    del db
-  
-  return results
-
-def benchmark_persistence(dims=128, count=10000):
-  print(f"\n{'='*60}")
-  print(f"BENCHMARK: Save/Load Performance")
-  print(f"{'='*60}")
-  
-  db = VectorDatabase(dims, VDBMetric.COSINE)
-  vectors = [generate_random_vector(dims) for _ in range(count)]
-  
-  print(f"  Populating database with {count:,} vectors...")
-  for i, vec in enumerate(vectors):
-    db.add_vector(vec, f"vec_{i}")
-  
-  filename = "/tmp/vdb_bench.vdb"
-  
-  print(f"  Saving to disk...")
-  start = time.time()
-  db.save(filename)
-  save_time = time.time() - start
-  
-  file_size = os.path.getsize(filename) / (1024 * 1024)
-  
-  print(f"  Loading from disk...")
-  start = time.time()
-  loaded_db = VectorDatabase.load(filename)
-  load_time = time.time() - start
-  
-  print(f"    Save time: {save_time:.3f}s")
-  print(f"    Load time: {load_time:.3f}s")
-  print(f"    File size: {file_size:.2f} MB")
-  print(f"    Vectors loaded: {loaded_db.count():,}")
-  
-  del db
-  del loaded_db
-  os.remove(filename)
-  
-  return {
-    'save_time': save_time,
-    'load_time': load_time,
-    'file_size': file_size,
-    'count': count
-  }
-
-def benchmark_clustering_quality(dims=128, num_vectors=5000, num_clusters=10):
-  print(f"\n{'='*60}")
-  print(f"BENCHMARK: Clustering Quality Analysis")
-  print(f"{'='*60}")
-  
-  vectors, cluster_centers = generate_clustered_vectors(num_vectors, dims, num_clusters)
-  
-  db = VectorDatabase(dims, VDBMetric.COSINE)
-  for i, vec in enumerate(vectors):
-    cluster_id = i % num_clusters
-    db.add_vector(vec, f"cluster_{cluster_id}_vec_{i}")
-  
-  results = {'clusters': [], 'accuracy': [], 'avg_distance': []}
-  
-  for cluster_idx in range(num_clusters):
-    query = cluster_centers[cluster_idx]
-    search_results = db.search(query, 50)
-    
-    correct = sum(1 for r in search_results if r['id'].startswith(f"cluster_{cluster_idx}_"))
-    accuracy = (correct / len(search_results)) * 100
-    avg_dist = sum(r['distance'] for r in search_results) / len(search_results)
-    
-    results['clusters'].append(cluster_idx)
-    results['accuracy'].append(accuracy)
-    results['avg_distance'].append(avg_dist)
-  
-  overall_accuracy = sum(results['accuracy']) / len(results['accuracy'])
-  print(f"  Overall clustering accuracy: {overall_accuracy:.1f}%")
-  
-  del db
   return results
 
 def benchmark_scalability(base_dims=64, multipliers=[1, 2, 4, 8, 16]):

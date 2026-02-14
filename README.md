@@ -12,6 +12,7 @@ A lightweight, header-only C library for storing and searching high-dimensional 
 - Save/load database to/from disk
 - Custom memory allocators support
 - No dependencies (except `pthreads` for multithreading)
+- Python bindings (refer to [`vdb.py`](/vdb.py))
 
 ### Usage
 
